@@ -166,6 +166,7 @@ void VI_MFP_Test()
 
 	Bottom2MFP bottommfp = &Bottom2::TopFunc;
 	MemberFunctionPointer mfp = bottommfp;
+	mfp = bottommfp;
 
 	void * pthis1 = mfp.Addressing(p_bottom);
 	void * pthis2 = mfp.AutoAddressing(p_bottom);

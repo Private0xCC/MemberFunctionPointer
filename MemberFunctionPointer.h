@@ -94,7 +94,7 @@ namespace Private
 
 #pragma endregion
 
-#pragma region  MFP 定义
+#pragma region  成员函数指针结构定义
 	//单继承成员函数指针
 	class SI_MFP
 	{
@@ -204,11 +204,13 @@ namespace Private
 		template<class T_Ret, class T, class ... T_Args>
 		T_Ret Apply(T * pthis, T_Args ... args) const;
 
+		//寻址出来可能是基类子对象，所以不 返回 T*
 		template<class T>
-		T * Addressing(T * pthis) const;
+		void * Addressing(T * pthis) const;
 
+		//寻址出来可能是基类子对象，所以不 返回 T*
 		template<class T>
-		T * AutoAddressing(T * pthis) const;
+		void * AutoAddressing(T * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
@@ -260,7 +262,8 @@ namespace Private
 
 #pragma endregion
 
-	//一下断言可以确保实际的成员函数指针大小与我们期望的一致,如果不一致，则说明不是VS环境，或者微软编译器对成员函数指针的实现方式发生了改变(这几乎不可能)
+	//以下断言可以确保实际的成员函数指针大小与我们期望的一致
+	//如果不一致，则说明不是VS环境，或者微软编译器对成员函数指针的实现方式发生了改变(这几乎不可能)
 	//未编译时,下面的静态断言可能会提示失败,不用担心,如果你有强迫症,可以注释掉.我就有强迫症.
 	//__STATIC_ASSERT_MFP_SIZE_CHECK__;
 
@@ -302,7 +305,7 @@ namespace Private
 	template<class T, class T_Ret, class ...T_Args>
 	SI_MFP & SI_MFP::operator=(T_Ret(T::*mfp)(T_Args...))
 	{
-		this->Deassign(mfp);
+		return this->Deassign(mfp);
 	}
 
 	template<class T, class T_Ret, class ...T_Args>
@@ -335,7 +338,7 @@ namespace Private
 	{
 		//调用成员函数指针，需要调用对象，即 this 指针
 		//我们不需要关心 this 的具体类型，只需要将其他任意类的成员函数指针
-		//转成当前类 __SIC 的成员函数指针，然后将传入的pthis转出当前类指针，最后通过当前类指针调用即可
+		//转成中间类 __SIC 的成员函数指针，然后将传入的pthis转出当前类指针，最后通过当前类指针调用即可
 		//因为 __SIC 声明时指定了 __single_inheritance,，所以 __SIC 的大小与其他类的成员函数指针大小相同
 		//转换时不会丢失数据
 
@@ -402,7 +405,7 @@ namespace Private
 	template<class T, class T_Ret, class ...T_Args>
 	MI_MFP & MI_MFP::operator=(T_Ret(T::*mfp)(T_Args...))
 	{
-		this->Deassign(mfp);
+		return this->Deassign(mfp);
 	}
 
 	template<class T, class T_Ret, class ...T_Args>
@@ -484,7 +487,7 @@ namespace Private
 	template<class T, class T_Ret, class ...T_Args>
 	VI_MFP & VI_MFP::operator=(T_Ret(T::*mfp)(T_Args...))
 	{
-		this->Deassign(mfp);
+		return this->Deassign(mfp);
 	}
 
 	template<class T, class T_Ret, class ...T_Args>
@@ -523,7 +526,7 @@ namespace Private
 	}
 
 	template<class T>
-	T * VI_MFP::Addressing(T * pthis) const
+	void * VI_MFP::Addressing(T * pthis) const
 	{
 		//虚基类表中，记录了 vbptr 到虚基类子对象的偏移量，也就是子类到虚基类子对象的偏移，数据类型是int，
 		//也就说每个数据占四个字节，需要注意的是 VBTableIndex的单位是1字节，一般VBTableIndex的值是四的倍数
@@ -552,12 +555,12 @@ namespace Private
 		//return AdjustedThis;
 
 		//=================================================================================
-		//为了防止错误的调用，我们直接调用AutoAddressing；
+		//目前无法手动计算寻址，为了防止错误的调用，我们直接调用AutoAddressing；
 		return AutoAddressing(pthis);
 	}
 
 	template<class T>
-	T * VI_MFP::AutoAddressing(T * pthis) const
+	void * VI_MFP::AutoAddressing(T * pthis) const
 	{
 		VI_MFP temp = *this;
 
@@ -695,29 +698,16 @@ namespace Private
 
 #pragma endregion
 
-	//兼任所有类型成员函数指针
+	//兼容所有类型成员函数指针
 	class MemberFunctionPointer :public Full_MFP
 	{
 	protected:
 		MFP_TYPE Type;//标记自身的实际类型
+		
+		const char * TypeName;
 
-		SI_MFP To_SI_MFP() const
-		{
-			SI_MFP si_mfp;
-			si_mfp.SetCodePtr(this->CodePtr);
-
-			return si_mfp;
-		}
-
-		MI_MFP To_MI_MFP() const
-		{
-			MI_MFP mi_mfp;
-			mi_mfp.SetCodePtr(this->CodePtr);
-			mi_mfp.SetDelta(this->Delta);
-
-			return mi_mfp;
-		}
-
+		//虚继承成员函数指针第三个成员是VBTableIndex，而完整的成员函数指针第四个成员才是VBTableIndex
+		//所以需要做一下特殊处理
 		VI_MFP To_VI_MFP() const
 		{
 			VI_MFP vi_mfp;
@@ -726,17 +716,6 @@ namespace Private
 			vi_mfp.SetVBTableIndex(this->VBTableIndex);
 
 			return vi_mfp;
-		}
-
-		Full_MFP To_Full_MFP() const
-		{
-			Full_MFP full_mfp;
-			full_mfp.SetCodePtr(this->CodePtr);
-			full_mfp.SetDelta(this->Delta);
-			full_mfp.SetFVtorDisp(this->FVtorDisp);
-			full_mfp.SetVBTableIndex(this->VBTableIndex);
-
-			return full_mfp;
 		}
 
 	public:
@@ -778,7 +757,7 @@ namespace Private
 			u._mfp = mfp;
 
 			MFP_TYPE type = (MFP_TYPE)sizeof(mfp);
-			this->Type = type;
+			
 			switch (type)
 			{
 			case MFP_TYPE::SI_MFP:
@@ -789,6 +768,7 @@ namespace Private
 				this->Delta = u.i1;
 				this->FVtorDisp = u.i2;
 				this->VBTableIndex = u.i3;
+				this->Type = type;
 				return *this;
 			}
 			case MFP_TYPE::VI_MFP:
@@ -797,6 +777,7 @@ namespace Private
 				this->Delta = u.i1;
 				this->FVtorDisp = u.i3;
 				this->VBTableIndex = u.i2;
+				this->Type = type;
 				return *this;
 			}
 			case MFP_TYPE::Invalid:
@@ -817,11 +798,11 @@ namespace Private
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->To_SI_MFP().Apply<T_Ret>(pthis,args...);
+				return this->SI_MFP::Apply<T_Ret>(pthis,args...);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->To_MI_MFP().Apply<T_Ret>(pthis, args...);
+				return this->MI_MFP::Apply<T_Ret>(pthis, args...);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
@@ -829,7 +810,7 @@ namespace Private
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->To_Full_MFP().Apply<T_Ret>(pthis, args...);
+				return this->Full_MFP::Apply<T_Ret>(pthis, args...);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:
@@ -845,11 +826,11 @@ namespace Private
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->To_SI_MFP().Addressing(pthis);
+				return this->SI_MFP::Addressing(pthis);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->To_MI_MFP().Addressing(pthis);
+				return this->MI_MFP::Addressing(pthis);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
@@ -857,7 +838,7 @@ namespace Private
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->To_Full_MFP().Addressing(pthis);
+				return this->Full_MFP::Addressing(pthis);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:
@@ -873,11 +854,11 @@ namespace Private
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->To_SI_MFP().AutoAddressing(pthis);
+				return this->SI_MFP::AutoAddressing(pthis);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->To_MI_MFP().AutoAddressing(pthis);
+				return this->MI_MFP::AutoAddressing(pthis);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
@@ -885,7 +866,7 @@ namespace Private
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->To_Full_MFP().AutoAddressing(pthis);
+				return this->Full_MFP::AutoAddressing(pthis);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:
@@ -898,15 +879,20 @@ namespace Private
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...))
 		{
+			MFP_TYPE DestType = (MFP_TYPE)sizeof(mfp);
+			if (DestType != Type)
+			{
+				//目标类型与实际类型不服，强行转换的话可能会存在数据丢失造成调用异常
+			}
 			switch (Type)
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->To_SI_MFP().Convert(p_mfp);
+				return this->SI_MFP::Convert(p_mfp);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->To_MI_MFP().Convert(p_mfp);
+				return this->MI_MFP::Convert(p_mfp);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
@@ -914,7 +900,7 @@ namespace Private
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->To_Full_MFP().Convert(p_mfp);
+				return this->Full_MFP::Convert(p_mfp);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:
