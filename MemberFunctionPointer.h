@@ -16,6 +16,14 @@
 * 三种方式，优先级递增
 *
 * 所以,在vc环境下,成员函数指针的表示形式一共有四种
+* 1.单继承类的成员函数指针,包含 1 个数据:函数的实际地址(对于虚函数来说则是 vcall thunk(virtual call thunk,翻译过来就是 虚拟调用转换 ).
+* 实际上vcall thunk 就是实际函数的跳转函数,函数内部会跳转到虚函数表中的slot位置对应的函数地址.微软使用 vcall thunk 技术来支持虚函数,所有的同名的虚函数(父类的虚函数和子类重写后的虚函数)都对应同一个vcall,之所以同名的虚函数可以和vcall thunk 多对一,是因为,不管是父类还是子类,同名的虚函数在虚函数表中的位置是一致的)
+* 举个例子来说就是,父类中的虚函数 A 在父类的虚函数表中是第 2 slot,那么子类重写 A 函数后,虚函数 A 在子类的虚函数表中是也第 2 slot,因为 子类的虚函数表自父类继承而来,子类只会拓展虚函数表(子类可以有自己的虚函数),不会改变继承过来的虚函数表,有点类似类的继承.
+* 每个 vcall thunk 对应的 slot 是固定的,然后会根据 this (或者调整后的this)找到虚函数表,计算方式为:vfptr = *(int * *)this , 计算原理就是 类的第一个成员就是 vfptr(如果存在虚函数)
+* 2.多继承类的成员函数指针,包含 2 个数据: 函数的实际地址,this 调整值(有关this调整值具体可以参考多继承的内存布局)
+* 3.虚继承类的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表索引(不是虚函数表 vbptr != vfptr),具体参考下面的代码实现和注释
+* 4.完整的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表偏移量(从 this 到 虚基类表),虚基类表索引
+* 具体的指针结构组成请参考 成员函数指针结构定义
 */
 
 #pragma region 静态断言宏
@@ -76,6 +84,7 @@ namespace Private
 	}
 
 #pragma region  SomeClass
+
 	class __Base {};
 	//无继承类
 	class __NIC {};
@@ -270,10 +279,15 @@ namespace Private
 	//成员函数指针类型的枚举值
 	enum class MFP_TYPE :unsigned char
 	{
+		//无效成员函数指针
 		Invalid = 0,
+		//单继承类的成员函数指针
 		SI_MFP = sizeof(void(__SIC::*)()),
+		//多继承类的成员函数指针
 		MI_MFP = sizeof(void(__MIC::*)()),
+		//虚继承类的成员函数指针
 		VI_MFP = sizeof(void(__VIC::*)()),
+		//完整成员函数指针
 		Full_MFP = sizeof(void(__UND::*)()),
 	};
 
@@ -703,8 +717,6 @@ namespace Private
 	{
 	protected:
 		MFP_TYPE Type;//标记自身的实际类型
-		
-		const char * TypeName;
 
 		//虚继承成员函数指针第三个成员是VBTableIndex，而完整的成员函数指针第四个成员才是VBTableIndex
 		//所以需要做一下特殊处理
@@ -879,8 +891,8 @@ namespace Private
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...))
 		{
-			MFP_TYPE DestType = (MFP_TYPE)sizeof(mfp);
-			if (DestType != Type)
+			MFP_TYPE DstType = (MFP_TYPE)sizeof(*p_mfp);
+			if (DstType != Type)
 			{
 				//目标类型与实际类型不服，强行转换的话可能会存在数据丢失造成调用异常
 			}
