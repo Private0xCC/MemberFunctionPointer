@@ -2,7 +2,7 @@
 
 //代码用到了不定长模板参数，编译器需要支持 C++11 标准
 #if __cplusplus < 199711L
-#error 需要编译器支持 C++11 标准
+#error [Private.MemberFunctionPointer]需要编译器支持 C++11 标准
 #endif
 
 /*
@@ -14,16 +14,28 @@
 * 3.继承关键字 __single_inheritance,__multiple_inheritance,__virtual_inheritance [Microsoft 专用]
 * https://msdn.microsoft.com/zh-cn/library/ck561bfk.aspx
 * 三种方式，优先级递增
-*
+*/
+
+/*
 * 所以,在vc环境下,成员函数指针的表示形式一共有四种
-* 1.单继承类的成员函数指针,包含 1 个数据:函数的实际地址(对于虚函数来说则是 vcall thunk(virtual call thunk,翻译过来就是 虚拟调用转换 ).
-* 实际上vcall thunk 就是实际函数的跳转函数,函数内部会跳转到虚函数表中的slot位置对应的函数地址.微软使用 vcall thunk 技术来支持虚函数,所有的同名的虚函数(父类的虚函数和子类重写后的虚函数)都对应同一个vcall,之所以同名的虚函数可以和vcall thunk 多对一,是因为,不管是父类还是子类,同名的虚函数在虚函数表中的位置是一致的)
-* 举个例子来说就是,父类中的虚函数 A 在父类的虚函数表中是第 2 slot,那么子类重写 A 函数后,虚函数 A 在子类的虚函数表中是也第 2 slot,因为 子类的虚函数表自父类继承而来,子类只会拓展虚函数表(子类可以有自己的虚函数),不会改变继承过来的虚函数表,有点类似类的继承.
-* 每个 vcall thunk 对应的 slot 是固定的,然后会根据 this (或者调整后的this)找到虚函数表,计算方式为:vfptr = *(int * *)this , 计算原理就是 类的第一个成员就是 vfptr(如果存在虚函数)
+* 1.单继承类的成员函数指针,包含 1 个数据:函数的实际地址(对于虚函数来说则是 vcall thunk(virtual call thunk,翻译过来就是 虚拟调用转换 ). 具体参考 【关于 vcall thunk】
 * 2.多继承类的成员函数指针,包含 2 个数据: 函数的实际地址,this 调整值(有关this调整值具体可以参考多继承的内存布局)
 * 3.虚继承类的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表索引(不是虚函数表 vbptr != vfptr),具体参考下面的代码实现和注释
 * 4.完整的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表偏移量(从 this 到 虚基类表),虚基类表索引
+* 注意 虚继承类的成员函数指针 与 完整的成员函数指针 之间存在的差异, 虚继承类的成员函数指针第 3 个数据是 [虚基类表索引],而完整的成员函数指针第 4 个数据才是
 * 具体的指针结构组成请参考 成员函数指针结构定义
+*/
+
+/* 关于 vcall thunk
+* 实际上vcall thunk 就是实际函数的跳转函数,函数内部会跳转到虚函数表中的slot位置对应的函数地址.
+* 微软使用 vcall thunk 技术来支持虚函数,所有的同名的虚函数(父类的虚函数和子类重写后的虚函数)都对应同一个vcall,
+* 之所以同名的虚函数可以和vcall thunk 多对一,是因为,不管是父类还是子类,同名的虚函数在虚函数表中的位置是一致的)
+* 举个例子来说就是,父类中的虚函数 A 在父类的虚函数表中是第 2 slot,那么子类重写 A 函数后,虚函数 A 在子类的虚函数表中
+* 是也第 2 slot,因为 子类的虚函数表自父类继承而来,子类只会拓展虚函数表(子类可以有自己的虚函数),
+* 不会改变继承过来的虚函数表,有点类似类的继承.
+* 每个 vcall thunk 对应的 slot 是固定的,然后会根据 this (或者调整后的this)找到虚函数表,
+* 计算方式为:const char * vbptr = *(char**)pthis , 计算原理就是 类的第一个成员就是 vfptr(如果存在虚函数)
+* 最后在虚函数表中的slot位置获取到实际的函数地址进行跳转
 */
 
 #pragma region 静态断言宏
@@ -153,6 +165,8 @@ namespace Private
 		//转换为C++原生的成员函数指针，请注意返回值与参数列表
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+
+		bool Equal(const SI_MFP & that)const;
 	};
 
 	//多继承成员函数指针
@@ -185,6 +199,8 @@ namespace Private
 
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+
+		bool Equal(const MI_MFP & that) const;
 	};
 
 	//虚继承成员函数指针
@@ -224,6 +240,8 @@ namespace Private
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
 
+		bool Equal(const VI_MFP & that) const;
+
 	};
 
 	//完整的成员函数指针
@@ -231,7 +249,7 @@ namespace Private
 	class Full_MFP :public MI_MFP
 	{
 	protected:
-		//this 到 vbptr 的偏移量
+		//this 到 vbptr 的偏移量,并不是 this(子类this) 到基类子对象的偏移量
 		int FVtorDisp;
 		//虚基类表索引
 		int VBTableIndex;
@@ -256,6 +274,8 @@ namespace Private
 
 		template<class T, class T_Ret, class ... T_Args>
 		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+
+		bool Equal(const Full_MFP & that) const;
 
 #pragma region Getter/Setter
 
@@ -291,7 +311,7 @@ namespace Private
 		Full_MFP = sizeof(void(__UND::*)()),
 	};
 
-#pragma region MFP 实现
+#pragma region 成员函数指针结构 实现
 
 #pragma region 单继承成员函数指针
 
@@ -391,6 +411,15 @@ namespace Private
 		return AdjustedThis;
 	}
 
+	bool SI_MFP::Equal(const SI_MFP & that) const
+	{
+		if (nullptr == &that)
+		{
+			return false;
+		}
+		return that.CodePtr == this->CodePtr;
+	}
+
 	template<class T, class T_Ret, class ... T_Args>
 	bool SI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...))
 	{
@@ -481,6 +510,15 @@ namespace Private
 			return true;
 		}
 		return false;
+	}
+
+	bool MI_MFP::Equal(const MI_MFP & that) const
+	{
+		if (nullptr == &that)
+		{
+			return false;
+		}
+		return this->SI_MFP::Equal(that) && that.Delta == this->Delta;
 	}
 
 #pragma endregion
@@ -596,6 +634,15 @@ namespace Private
 		return false;
 	}
 
+	bool VI_MFP::Equal(const VI_MFP & that) const
+	{
+		if (nullptr == &that)
+		{
+			return false;
+		}
+		return this->MI_MFP::Equal(that) && that.VBTableIndex == this->VBTableIndex;
+	}
+
 #pragma endregion
 
 #pragma region 完整的成员函数指针
@@ -645,7 +692,9 @@ namespace Private
 
 	void * Full_MFP::Addressing(void * pthis) const
 	{
-		//vbptr 到 虚基类子对象的偏移量，并不是子类到虚基类子对象的偏移量
+		//因为完整成员函数指针可以通过 FVtorDisp 找到 vbptr,所以并不需要 this 的类型,区别于 虚继承成员函数指针的寻址方式
+
+		//virtual_delta表示虚基类表指针vbptr 到 虚基类子对象的偏移量，并不是子类到虚基类子对象的偏移量
 		int virtual_delta = 0;
 
 		if (this->VBTableIndex)
@@ -656,7 +705,11 @@ namespace Private
 			virtual_delta = *(int*)(vbptr + this->VBTableIndex);
 		}
 
-		//最后计算
+		// 最后计算调整后的this
+		// this 到基类子对象 this的偏移量 = 
+		// this调整值(Delta) + this到vbtpr的偏移量(FVtorDisp) + vbtpr到基类子对象的偏移量(virtual_delta)
+		// 整个计算过程为:1.通过this 找到虚基类表 2.通过虚基类表计算得到虚基类表到基类子对象的偏移 3.最后通过偏移找到基类子对象
+
 		void * AdjustedThis = (char *)pthis + Delta + FVtorDisp + virtual_delta;
 
 		return AdjustedThis;
@@ -706,6 +759,15 @@ namespace Private
 			return true;
 		}
 		return false;
+	}
+
+	bool Full_MFP::Equal(const Full_MFP & that) const
+	{
+		if (nullptr == &that)
+		{
+			return false;
+		}
+		return this->MI_MFP::Equal(that) && that.FVtorDisp == this->FVtorDisp && that.VBTableIndex == this->VBTableIndex;
 	}
 
 #pragma endregion
@@ -798,7 +860,17 @@ namespace Private
 			}
 		}
 
-		MFP_TYPE GetType()
+		MemberFunctionPointer & Reset()
+		{
+			this->CodePtr = nullptr;
+			this->Delta = 0;
+			this->FVtorDisp = 0;
+			this->VBTableIndex = 0;
+			this->Type = MFP_TYPE::Invalid;
+			return *this;
+		}
+
+		MFP_TYPE GetType() const
 		{
 			return Type;
 		}
@@ -919,6 +991,20 @@ namespace Private
 				//可以考虑抛异常
 				return false;//不应该到这里
 			}
+		}
+
+		bool Equal(const MemberFunctionPointer & that) const
+		{
+			if (that.Type != this->Type)
+			{
+				return false;
+			}
+			return this->Full_MFP::Equal(that);
+		}
+
+		bool operator==(const MemberFunctionPointer & that) const
+		{
+			return this->Equal(that);
 		}
 	};
 
