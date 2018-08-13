@@ -40,10 +40,10 @@
 
 #pragma region 静态断言宏
 #define __STATIC_ASSERT_MFP_SIZE_CHECK__ \
-static_assert(sizeof(void(__SIC::*)()) == sizeof(SI_MFP), "An unexpected mistake,[single inheritance member function pointer]  size is not consistent with expectations.");\
-static_assert(sizeof(void(__MIC::*)()) == sizeof(MI_MFP), "An unexpected mistake,[multiple inheritance member function pointer]  size is not consistent with expectations.");\
-static_assert(sizeof(void(__VIC::*)()) == sizeof(VI_MFP), "An unexpected mistake,[virtual inheritance member function pointer]  size is not consistent with expectations.");\
-static_assert(sizeof(void(__UND::*)()) == sizeof(Full_MFP), "An unexpected mistake,[Full member function pointer]  size is not consistent with expectations.");
+static_assert(sizeof(void(__SIC::*)()) == sizeof(Private::SI_MFP), "An unexpected mistake,[single inheritance member function pointer]  size is not consistent with expectations.");\
+static_assert(sizeof(void(__MIC::*)()) == sizeof(Private::MI_MFP), "An unexpected mistake,[multiple inheritance member function pointer]  size is not consistent with expectations.");\
+static_assert(sizeof(void(__VIC::*)()) == sizeof(Private::VI_MFP), "An unexpected mistake,[virtual inheritance member function pointer]  size is not consistent with expectations.");\
+static_assert(sizeof(void(__UND::*)()) == sizeof(Private::Full_MFP), "An unexpected mistake,[Full member function pointer]  size is not consistent with expectations.");
 
 #define __STATIC_ASSERT_SI_MFP_CHECK__(mfp) \
 static_assert(sizeof(mfp) == (unsigned char)MFP_TYPE::SI_MFP, "[mfp] Not a single inherited member function pointer")
@@ -60,40 +60,6 @@ static_assert(sizeof(mfp) <= (unsigned char)MFP_TYPE::Full_MFP, "[mfp] Not a val
 
 namespace Private
 {
-	//实现方式与C++标准库一致，自己实现该函数是为了减少外部依赖
-	void * __memcpy(void *dst, const void *src, unsigned int len)
-	{
-		if (nullptr == dst || nullptr == src)
-		{
-			return nullptr;
-		}
-
-		void *ret = dst;
-
-		if (dst <= src || (char *)dst >= (char *)src + len)
-		{
-			//没有内存重叠，从低地址开始复制
-			while (len--)
-			{
-				*(char *)dst = *(char *)src;
-				dst = (char *)dst + 1;
-				src = (char *)src + 1;
-			}
-		}
-		else
-		{
-			//有内存重叠，从高地址开始复制
-			src = (char *)src + len - 1;
-			dst = (char *)dst + len - 1;
-			while (len--)
-			{
-				*(char *)dst = *(char *)src;
-				dst = (char *)dst - 1;
-				src = (char *)src - 1;
-			}
-		}
-		return ret;
-	}
 
 #pragma region  SomeClass
 
@@ -164,9 +130,9 @@ namespace Private
 
 		//转换为C++原生的成员函数指针，请注意返回值与参数列表
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
 
-		bool Equal(const SI_MFP & that)const;
+		bool Equal(const SI_MFP & that) const;
 	};
 
 	//多继承成员函数指针
@@ -198,7 +164,7 @@ namespace Private
 		void * AutoAddressing(void * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const MI_MFP & that) const;
 	};
@@ -238,7 +204,7 @@ namespace Private
 		void * AutoAddressing(T * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const VI_MFP & that) const;
 
@@ -273,7 +239,7 @@ namespace Private
 		void * AutoAddressing(void * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...));
+		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const Full_MFP & that) const;
 
@@ -294,7 +260,7 @@ namespace Private
 	//以下断言可以确保实际的成员函数指针大小与我们期望的一致
 	//如果不一致，则说明不是VS环境，或者微软编译器对成员函数指针的实现方式发生了改变(这几乎不可能)
 	//未编译时,下面的静态断言可能会提示失败,不用担心,如果你有强迫症,可以注释掉.我就有强迫症.
-	//__STATIC_ASSERT_MFP_SIZE_CHECK__;
+	__STATIC_ASSERT_MFP_SIZE_CHECK__;
 
 	//成员函数指针类型的枚举值
 	enum class MFP_TYPE :unsigned char
@@ -346,9 +312,8 @@ namespace Private
 	SI_MFP & SI_MFP::Deassign(T_Ret(T::*mfp)(T_Args...))
 	{
 		__STATIC_ASSERT_SI_MFP_CHECK__(mfp);
-
-		__memcpy(this, &mfp, sizeof(SI_MFP));
-
+		void * p_mfp = &mfp;
+		this->CodePtr = *(void **)p_mfp;
 		return *this;
 	}
 
@@ -362,8 +327,8 @@ namespace Private
 	{
 		//不管传入的成员函数指针是是哪种类型，我们只要CodePtr,也就是成员函数指针的第一部分
 		//成员函数指针的第一部分数据，也就是函数实际地址
-		__memcpy(&CodePtr, &mfp, sizeof(CodePtr));
-
+		void * p_mfp = &mfp;
+		this->CodePtr = *(void **)p_mfp;
 		return *this;
 	}
 
@@ -379,7 +344,8 @@ namespace Private
 		typedef T_Ret(__SIC::*MFP)(T_Args...);
 
 		MFP mfp;
-		__memcpy(&mfp, this, sizeof(MFP));
+		
+		this->Convert(&mfp);
 
 		return ((__SIC *)pthis->*mfp)(args...);
 	}
@@ -421,11 +387,12 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool SI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...))
+	bool SI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(SI_MFP))
 		{
-			__memcpy(p_mfp, this, sizeof(SI_MFP));
+			*(void **)p_mfp = this->CodePtr;
+
 			return true;
 		}
 		return false;
@@ -456,7 +423,10 @@ namespace Private
 	{
 		__STATIC_ASSERT_MI_MFP_CHECK__(mfp);
 
-		__memcpy(this, &mfp, sizeof(*this));
+		void * p_mfp = &mfp;
+		this->CodePtr = *(void **)p_mfp;
+		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
+		return *this;
 
 		return *this;
 	}
@@ -479,7 +449,8 @@ namespace Private
 		typedef T_Ret(__MIC::*MFP)(T_Args...);
 
 		MFP mfp;
-		__memcpy(&mfp, this, sizeof(MFP));
+		
+		this->Convert(&mfp);
 
 		return ((__MIC *)pthis->*mfp)(args...);
 	}
@@ -502,11 +473,13 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool MI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...))
+	bool MI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(MI_MFP))
 		{
-			__memcpy(p_mfp, this, sizeof(MI_MFP));
+			*(void **)p_mfp = this->CodePtr;
+			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
+
 			return true;
 		}
 		return false;
@@ -547,8 +520,10 @@ namespace Private
 	{
 		__STATIC_ASSERT_VI_MFP_CHECK__(mfp);
 
-		__memcpy(this, &mfp, sizeof(VI_MFP));
-
+		void * p_mfp = &mfp;
+		this->CodePtr = *(void **)p_mfp;
+		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
+		this->VBTableIndex = *(int *)((char *)p_mfp + sizeof(void *)+sizeof(int));
 		return *this;
 	}
 
@@ -571,8 +546,10 @@ namespace Private
 		//最后导致调用异常
 
 		typedef T_Ret(T::*MFP)(T_Args...);
+
 		MFP mfp;
-		__memcpy(&mfp, this, sizeof(MFP));
+
+		this->Convert(&mfp);
 
 		return (pthis->*mfp)(args...);
 	}
@@ -586,7 +563,7 @@ namespace Private
 		//子类的第二个虚基类偏移记录在 vbptr指定地址+8的地方, VBTableIndex就等于8
 		//作者其实不是很明白为什么这么设计，感觉很怪，
 
-		//虚继承中，继承情况很复杂，vbptr 的位置只有编译器知道，
+		//虚继承中，继承情况很复杂，vbptr 的位置只有编译器知道(编译期)，
 		//我们是无法确定的(也许可以确定，但是作者截至目前为止还不知道如何确定 vbptr 的位置)
 
 		//每个类的 vbptr位置是不同的，编译器根据 this 的类型来确定 vbptr 的位置
@@ -624,11 +601,14 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool VI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...))
+	bool VI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(VI_MFP))
 		{
-			__memcpy(p_mfp, this, sizeof(VI_MFP));
+			*(void **)p_mfp = this->CodePtr;
+			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
+			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)) = this->VBTableIndex;
+
 			return true;
 		}
 		return false;
@@ -668,8 +648,10 @@ namespace Private
 	{
 		__STATIC_ASSERT_FULL_MFP_CHECK__(mfp);
 
-		__memcpy(this, &mfp, sizeof(Full_MFP));
-
+		this->CodePtr = *(void **)p_mfp;
+		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
+		this->FVtorDisp = *(int *)((char *)p_mfp + sizeof(void *) + sizeof(int));
+		this->VBTableIndex = *(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)*2);
 		return *this;
 	}
 
@@ -685,7 +667,7 @@ namespace Private
 
 		MFP mfp;
 
-		__memcpy(&mfp, this, sizeof(MFP));
+		this->Convert(&mfp);
 
 		return ((__UND *)pthis->*mfp)(args...);
 	}
@@ -694,23 +676,23 @@ namespace Private
 	{
 		//因为完整成员函数指针可以通过 FVtorDisp 找到 vbptr,所以并不需要 this 的类型,区别于 虚继承成员函数指针的寻址方式
 
-		//virtual_delta表示虚基类表指针vbptr 到 虚基类子对象的偏移量，并不是子类到虚基类子对象的偏移量
+		//virtual_delta表示子类到虚基类子对象的偏移量
 		int virtual_delta = 0;
 
 		if (this->VBTableIndex)
 		{
 			//先通过 FVtorDisp 找到 vbptr
-			const char * vbptr = *(char **)((char *)pthis + this->FVtorDisp);
+			const char * vbptr = *(char **)((char *)pthis + this->Delta + this->FVtorDisp);
 			//然后从虚基类表中取到虚基类偏移量
 			virtual_delta = *(int*)(vbptr + this->VBTableIndex);
 		}
 
 		// 最后计算调整后的this
 		// this 到基类子对象 this的偏移量 = 
-		// this调整值(Delta) + this到vbtpr的偏移量(FVtorDisp) + vbtpr到基类子对象的偏移量(virtual_delta)
+		// this调整值(Delta) + vbtpr到基类子对象的偏移量(virtual_delta)
 		// 整个计算过程为:1.通过this 找到虚基类表 2.通过虚基类表计算得到虚基类表到基类子对象的偏移 3.最后通过偏移找到基类子对象
 
-		void * AdjustedThis = (char *)pthis + Delta + FVtorDisp + virtual_delta;
+		void * AdjustedThis = (char *)pthis + Delta /*+ FVtorDisp */ + virtual_delta;//不应该加上FVtorDisp,之前的理解是错误的
 
 		return AdjustedThis;
 
@@ -751,11 +733,15 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool Full_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...))
+	bool Full_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(Full_MFP))
 		{
-			__memcpy(p_mfp, this, sizeof(Full_MFP));
+			*(void **)p_mfp = this->CodePtr;
+			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
+			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)) = this->FVtorDisp;
+			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int) * 2) = this->VBTableIndex;
+
 			return true;
 		}
 		return false;
@@ -961,7 +947,7 @@ namespace Private
 
 		//转换为C++原生的成员函数指针，请注意返回值与参数列表
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...))
+		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const
 		{
 			MFP_TYPE DstType = (MFP_TYPE)sizeof(*p_mfp);
 			if (DstType != Type)
