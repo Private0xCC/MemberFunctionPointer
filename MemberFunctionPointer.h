@@ -5,6 +5,10 @@
 #error [Private.MemberFunctionPointer]需要编译器支持 C++11 标准
 #endif
 
+#ifndef _MSC_VER
+#error [Private.MemberFunctionPointer]需要仅支持 MS VS 编译器
+#endif
+
 /*
 * 在vc环境下,影响成员函数指针的表示形式的方式有三种
 * 1.编译器开关 /vmg /vmb
@@ -21,7 +25,7 @@
 * 1.单继承类的成员函数指针,包含 1 个数据:函数的实际地址(对于虚函数来说则是 vcall thunk(virtual call thunk,翻译过来就是 虚拟调用转换 ). 具体参考 【关于 vcall thunk】
 * 2.多继承类的成员函数指针,包含 2 个数据: 函数的实际地址,this 调整值(有关this调整值具体可以参考多继承的内存布局)
 * 3.虚继承类的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表索引(不是虚函数表 vbptr != vfptr),具体参考下面的代码实现和注释
-* 4.完整的成员函数指针,包含 3 个数据: 函数的实际地址,this 调整值,虚基类表偏移量(从 this 到 虚基类表),虚基类表索引
+* 4.完整的成员函数指针,包含 4 个数据: 函数的实际地址,this 调整值,虚基类表偏移量(从 this 到 虚基类表),虚基类表索引
 * 注意 虚继承类的成员函数指针 与 完整的成员函数指针 之间存在的差异, 虚继承类的成员函数指针第 3 个数据是 [虚基类表索引],而完整的成员函数指针第 4 个数据才是
 * 具体的指针结构组成请参考 成员函数指针结构定义
 */
@@ -130,7 +134,7 @@ namespace Private
 
 		//转换为C++原生的成员函数指针，请注意返回值与参数列表
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
+		bool ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const SI_MFP & that) const;
 	};
@@ -164,7 +168,7 @@ namespace Private
 		void * AutoAddressing(void * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
+		bool ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const MI_MFP & that) const;
 	};
@@ -204,7 +208,7 @@ namespace Private
 		void * AutoAddressing(T * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
+		bool ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const VI_MFP & that) const;
 
@@ -239,7 +243,7 @@ namespace Private
 		void * AutoAddressing(void * pthis) const;
 
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const;
+		bool ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const;
 
 		bool Equal(const Full_MFP & that) const;
 
@@ -284,6 +288,7 @@ namespace Private
 	SI_MFP & SI_MFP::SetCodePtr(void * codeptr)
 	{
 		this->CodePtr = codeptr;
+
 		return *this;
 	}
 
@@ -312,8 +317,9 @@ namespace Private
 	SI_MFP & SI_MFP::Deassign(T_Ret(T::*mfp)(T_Args...))
 	{
 		__STATIC_ASSERT_SI_MFP_CHECK__(mfp);
-		void * p_mfp = &mfp;
-		this->CodePtr = *(void **)p_mfp;
+
+		*this = *(SI_MFP *)&mfp;
+
 		return *this;
 	}
 
@@ -329,6 +335,7 @@ namespace Private
 		//成员函数指针的第一部分数据，也就是函数实际地址
 		void * p_mfp = &mfp;
 		this->CodePtr = *(void **)p_mfp;
+
 		return *this;
 	}
 
@@ -345,7 +352,7 @@ namespace Private
 
 		MFP mfp;
 		
-		this->Convert(&mfp);
+		this->ToNativeMFP(&mfp);
 
 		return ((__SIC *)pthis->*mfp)(args...);
 	}
@@ -387,11 +394,11 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool SI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
+	bool SI_MFP::ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(SI_MFP))
 		{
-			*(void **)p_mfp = this->CodePtr;
+			*p_mfp = *(T_Ret(T::**)(T_Args...))this;
 
 			return true;
 		}
@@ -423,10 +430,7 @@ namespace Private
 	{
 		__STATIC_ASSERT_MI_MFP_CHECK__(mfp);
 
-		void * p_mfp = &mfp;
-		this->CodePtr = *(void **)p_mfp;
-		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
-		return *this;
+		*this = *(MI_MFP *)&mfp;
 
 		return *this;
 	}
@@ -450,7 +454,7 @@ namespace Private
 
 		MFP mfp;
 		
-		this->Convert(&mfp);
+		this->ToNativeMFP(&mfp);
 
 		return ((__MIC *)pthis->*mfp)(args...);
 	}
@@ -473,12 +477,11 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool MI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
+	bool MI_MFP::ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(MI_MFP))
 		{
-			*(void **)p_mfp = this->CodePtr;
-			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
+			*p_mfp = *(T_Ret(T::**)(T_Args...))this;
 
 			return true;
 		}
@@ -520,10 +523,8 @@ namespace Private
 	{
 		__STATIC_ASSERT_VI_MFP_CHECK__(mfp);
 
-		void * p_mfp = &mfp;
-		this->CodePtr = *(void **)p_mfp;
-		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
-		this->VBTableIndex = *(int *)((char *)p_mfp + sizeof(void *)+sizeof(int));
+		*this = *(VI_MFP *)&mfp;
+
 		return *this;
 	}
 
@@ -535,6 +536,7 @@ namespace Private
 	VI_MFP & VI_MFP::SetVBTableIndex(int vbtable_index)
 	{
 		VBTableIndex = vbtable_index;
+
 		return *this;
 	}
 
@@ -549,7 +551,7 @@ namespace Private
 
 		MFP mfp;
 
-		this->Convert(&mfp);
+		this->ToNativeMFP(&mfp);
 
 		return (pthis->*mfp)(args...);
 	}
@@ -601,13 +603,11 @@ namespace Private
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool VI_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
+	bool VI_MFP::ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(VI_MFP))
 		{
-			*(void **)p_mfp = this->CodePtr;
-			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
-			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)) = this->VBTableIndex;
+			*p_mfp = *(T_Ret(T::**)(T_Args...))this;
 
 			return true;
 		}
@@ -648,10 +648,8 @@ namespace Private
 	{
 		__STATIC_ASSERT_FULL_MFP_CHECK__(mfp);
 
-		this->CodePtr = *(void **)p_mfp;
-		this->Delta = *(int *)((char *)p_mfp + sizeof(void *));
-		this->FVtorDisp = *(int *)((char *)p_mfp + sizeof(void *) + sizeof(int));
-		this->VBTableIndex = *(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)*2);
+		*this = *(Full_MFP *)&mfp;
+
 		return *this;
 	}
 
@@ -667,7 +665,7 @@ namespace Private
 
 		MFP mfp;
 
-		this->Convert(&mfp);
+		this->ToNativeMFP(&mfp);
 
 		return ((__UND *)pthis->*mfp)(args...);
 	}
@@ -718,6 +716,7 @@ namespace Private
 	Full_MFP & Full_MFP::SetFVtorDisp(int fVtorDisp)
 	{
 		FVtorDisp = fVtorDisp;
+
 		return *this;
 	}
 
@@ -729,18 +728,16 @@ namespace Private
 	Full_MFP & Full_MFP::SetVBTableIndex(int vbtable_index)
 	{
 		VBTableIndex = vbtable_index;
+
 		return *this;
 	}
 
 	template<class T, class T_Ret, class ... T_Args>
-	bool Full_MFP::Convert(T_Ret(T::** p_mfp)(T_Args...)) const
+	bool Full_MFP::ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const
 	{
 		if (sizeof(*p_mfp) == sizeof(Full_MFP))
 		{
-			*(void **)p_mfp = this->CodePtr;
-			*(int *)((char *)p_mfp + sizeof(void *)) = this->Delta;
-			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int)) = this->FVtorDisp;
-			*(int *)((char *)p_mfp + sizeof(void *) + sizeof(int) * 2) = this->VBTableIndex;
+			*p_mfp = *(T_Ret(T::**)(T_Args...))this;
 
 			return true;
 		}
@@ -829,6 +826,7 @@ namespace Private
 				this->FVtorDisp = u.i2;
 				this->VBTableIndex = u.i3;
 				this->Type = type;
+
 				return *this;
 			}
 			case MFP_TYPE::VI_MFP:
@@ -838,6 +836,7 @@ namespace Private
 				this->FVtorDisp = u.i3;
 				this->VBTableIndex = u.i2;
 				this->Type = type;
+
 				return *this;
 			}
 			case MFP_TYPE::Invalid:
@@ -853,6 +852,7 @@ namespace Private
 			this->FVtorDisp = 0;
 			this->VBTableIndex = 0;
 			this->Type = MFP_TYPE::Invalid;
+
 			return *this;
 		}
 
@@ -947,7 +947,7 @@ namespace Private
 
 		//转换为C++原生的成员函数指针，请注意返回值与参数列表
 		template<class T, class T_Ret, class ... T_Args>
-		bool Convert(T_Ret(T::** p_mfp)(T_Args...)) const
+		bool ToNativeMFP(T_Ret(T::** p_mfp)(T_Args...)) const
 		{
 			MFP_TYPE DstType = (MFP_TYPE)sizeof(*p_mfp);
 			if (DstType != Type)
@@ -958,19 +958,19 @@ namespace Private
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->SI_MFP::Convert(p_mfp);
+				return this->SI_MFP::ToNativeMFP(p_mfp);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->MI_MFP::Convert(p_mfp);
+				return this->MI_MFP::ToNativeMFP(p_mfp);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
-				return this->To_VI_MFP().Convert(p_mfp);
+				return this->To_VI_MFP().ToNativeMFP(p_mfp);
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->Full_MFP::Convert(p_mfp);
+				return this->Full_MFP::ToNativeMFP(p_mfp);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:

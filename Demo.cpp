@@ -97,16 +97,16 @@ void SI_MFP_Test()
 {
 	cout << "====================SI_MFP_Test====================" << endl;
 
-	Left bottom, *p_bottom= &bottom;
-	
+	Left bottom, *p_bottom = &bottom;
+
 
 	LeftMFP bottommfp = &Left::LeftFunc;
 	MemberFunctionPointer mfp = bottommfp;
 
-	void * pthis1= mfp.Addressing(p_bottom);
+	void * pthis1 = mfp.Addressing(p_bottom);
 	void * pthis2 = mfp.AutoAddressing(p_bottom);
 	LeftMFP bottommfp2;
-	mfp.Convert(&bottommfp2);
+	mfp.ToNativeMFP(&bottommfp2);
 
 	cout << "对象实际地址:" << p_bottom << endl;
 
@@ -119,7 +119,7 @@ void SI_MFP_Test()
 	cout << "转换为C++原生指针调用:" << endl;
 	(p_bottom->*bottommfp2)(3);
 
-	cout << "Apply:" <<  endl;
+	cout << "Apply:" << endl;
 	mfp.Apply<int>(p_bottom, 5);
 
 	cout << "==================SI_MFP_Test End==================" << endl;
@@ -138,7 +138,7 @@ void MI_MFP_Test()
 	void * pthis1 = mfp.Addressing(p_bottom);
 	void * pthis2 = mfp.AutoAddressing(p_bottom);
 	BottomMFP bottommfp2;
-	mfp.Convert(&bottommfp2);
+	mfp.ToNativeMFP(&bottommfp2);
 
 	cout << "对象实际地址:" << p_bottom << endl;
 
@@ -171,7 +171,7 @@ void VI_MFP_Test()
 	void * pthis1 = mfp.Addressing(p_bottom);
 	void * pthis2 = mfp.AutoAddressing(p_bottom);
 	Bottom2MFP bottommfp2;
-	mfp.Convert(&bottommfp2);
+	mfp.ToNativeMFP(&bottommfp2);
 
 	cout << "对象实际地址:" << p_bottom << endl;
 
