@@ -5,6 +5,7 @@
 #error [Private.MemberFunctionPointer]需要编译器支持 C++11 标准
 #endif
 
+//代码是针对 微软编译器 实现的
 #ifndef _MSC_VER
 #error [Private.MemberFunctionPointer]需要仅支持 MS VS 编译器
 #endif
