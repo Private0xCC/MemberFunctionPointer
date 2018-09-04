@@ -14,6 +14,11 @@ public:
 		cout << "TopFunc    this:" << this << "  Top_i:" << Top_i << "  i:" << i << endl;
 		return i;
 	}
+	virtual int TopVFunc(int i)
+	{
+		cout << "TopVFunc    this:" << this << "  Top_i:" << Top_i << "  i:" << i << endl;
+		return i;
+	}
 };
 
 class Left :public Top
@@ -71,7 +76,7 @@ public:
 	}
 };
 
-class Bottom2 :public VLeft, public VRight
+class Bottom2 :public virtual VLeft, public virtual VRight
 {
 public:
 	int Bottom2_i = 0;
@@ -81,6 +86,7 @@ public:
 		return i;
 	}
 };
+
 
 typedef int(Top::*TopMFP)(int);
 typedef int(Left::*LeftMFP)(int);
@@ -194,7 +200,7 @@ int main()
 {
 	SI_MFP_Test();
 	MI_MFP_Test();
-	VI_MFP_Test();
+	VI_MFP_Test(); 
 	//更多单元测试正在更新...
 	return 0;
 }

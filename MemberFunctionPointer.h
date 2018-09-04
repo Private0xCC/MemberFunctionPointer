@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma region Requirements
+
 //代码用到了不定长模板参数，编译器需要支持 C++11 标准
 #if __cplusplus < 199711L
 #error [Private.MemberFunctionPointer]需要编译器支持 C++11 标准
@@ -9,6 +11,8 @@
 #ifndef _MSC_VER
 #error [Private.MemberFunctionPointer]需要仅支持 MS VS 编译器
 #endif
+
+#pragma endregion
 
 /*
 * 在vc环境下,影响成员函数指针的表示形式的方式有三种
