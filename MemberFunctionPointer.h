@@ -73,12 +73,11 @@ namespace Private
 #pragma region  SomeClass
 
 	class __Base {};
-	//无继承类
-	class __NIC {};
+	class __Base2 {};
 	//单继承类
 	class __single_inheritance __SIC : __Base{};
 	//多继承类
-	class __multiple_inheritance __MIC : __Base, __NIC{};
+	class __multiple_inheritance __MIC : __Base, __Base2{};
 	//虚继承类
 	class __virtual_inheritance __VIC : virtual __Base{};
 
@@ -120,7 +119,7 @@ namespace Private
 
 		//调用成员函数指针，需要保证返回值与参数列表与实际函数签名一致，否则可能会导致调用异常
 		template<class T_Ret, class ... T_Args>
-		T_Ret Apply(void * pthis, T_Args ... args) const;
+		T_Ret Call(void * pthis, T_Args ... args) const;
 
 		//事实上，我们不需要关心编译器是如何完成寻址的
 		//我们只需要知道，通过成员函数指针进行函数调用的时候
@@ -166,7 +165,7 @@ namespace Private
 		MI_MFP & SetDelta(int delta);
 
 		template<class T_Ret, class ... T_Args>
-		T_Ret Apply(void * pthis, T_Args ... args) const;
+		T_Ret Call(void * pthis, T_Args ... args) const;
 
 		void * Addressing(void * pthis) const;
 
@@ -202,7 +201,7 @@ namespace Private
 		VI_MFP & SetVBTableIndex(int vbtable_index);
 
 		template<class T_Ret, class T, class ... T_Args>
-		T_Ret Apply(T * pthis, T_Args ... args) const;
+		T_Ret Call(T * pthis, T_Args ... args) const;
 
 		//寻址出来可能是基类子对象，所以不 返回 T*
 		template<class T>
@@ -241,7 +240,7 @@ namespace Private
 		Full_MFP & Deassign(T_Ret(T::*mfp)(T_Args...));
 
 		template<class T_Ret, class ... T_Args>
-		T_Ret Apply(void * pthis, T_Args ... args) const;
+		T_Ret Call(void * pthis, T_Args ... args) const;
 
 		void * Addressing(void * pthis) const;
 
@@ -345,7 +344,7 @@ namespace Private
 	}
 
 	template<class T_Ret, class ... T_Args>
-	T_Ret SI_MFP::Apply(void * pthis, T_Args ... args) const
+	T_Ret SI_MFP::Call(void * pthis, T_Args ... args) const
 	{
 		//调用成员函数指针，需要调用对象，即 this 指针
 		//我们不需要关心 this 的具体类型，只需要将其他任意类的成员函数指针
@@ -384,7 +383,7 @@ namespace Private
 		temp.SetCodePtr(&SI_MFP::GetThis);
 
 		//寻址拿到调整后的this指针
-		void* AdjustedThis = temp.Apply<void *>(pthis);
+		void* AdjustedThis = temp.Call<void *>(pthis);
 
 		return AdjustedThis;
 	}
@@ -453,7 +452,7 @@ namespace Private
 	}
 
 	template<class T_Ret, class ... T_Args>
-	T_Ret MI_MFP::Apply(void * pthis, T_Args ... args) const
+	T_Ret MI_MFP::Call(void * pthis, T_Args ... args) const
 	{
 		typedef T_Ret(__MIC::*MFP)(T_Args...);
 
@@ -476,7 +475,7 @@ namespace Private
 		temp.SetCodePtr(&MI_MFP::GetThis);
 
 		//寻址拿到调整后的this指针
-		void* AdjustedThis = temp.Apply<void *>(pthis);
+		void* AdjustedThis = temp.Call<void *>(pthis);
 
 		return AdjustedThis;
 	}
@@ -546,7 +545,7 @@ namespace Private
 	}
 
 	template<class T_Ret, class T, class ... T_Args>
-	T_Ret VI_MFP::Apply(T * pthis, T_Args ... args) const
+	T_Ret VI_MFP::Call(T * pthis, T_Args ... args) const
 	{
 		//虚继承函数指针在调用时，编译器需要知道 this 的类型，以便他去找vbptr
 		//如果像 单继承成员函数指针和多继承成员函数指针那样通过中间类去调用的话，会导致找到错误的 vbptr
@@ -602,7 +601,7 @@ namespace Private
 
 		temp.SetCodePtr(&VI_MFP::GetThis);
 		//寻址拿到调整后的this指针
-		T* AdjustedThis = temp.Apply<T *>(pthis);
+		T* AdjustedThis = temp.Call<T *>(pthis);
 
 		return AdjustedThis;
 	}
@@ -659,7 +658,7 @@ namespace Private
 	}
 
 	template<class T_Ret, class ...T_Args>
-	T_Ret Full_MFP::Apply(void * pthis, T_Args ...args) const
+	T_Ret Full_MFP::Call(void * pthis, T_Args ...args) const
 	{
 		//与虚继承成员函数指针不同,完整的成员函数指针可以像单继承和多继承成员函数指针一样
 		//通过中间类this来调用,因为 由于FVtorDisp的存在,编译器可以正确的找到vbptr。
@@ -708,7 +707,7 @@ namespace Private
 		temp.SetCodePtr(&Full_MFP::GetThis);
 
 		//寻址拿到调整后的this指针
-		void* AdjustedThis = temp.Apply<void *>(pthis);
+		void* AdjustedThis = temp.Call<void *>(pthis);
 
 		return AdjustedThis;
 	}
@@ -867,25 +866,25 @@ namespace Private
 		}
 
 		template<class T_Ret, class T, class ... T_Args>
-		T_Ret Apply(T * pthis, T_Args ... args) const
+		T_Ret Call(T * pthis, T_Args ... args) const
 		{
 			switch (Type)
 			{
 			case Private::MFP_TYPE::SI_MFP:
 			{
-				return this->SI_MFP::Apply<T_Ret>(pthis,args...);
+				return this->SI_MFP::Call<T_Ret>(pthis,args...);
 			}
 			case Private::MFP_TYPE::MI_MFP:
 			{
-				return this->MI_MFP::Apply<T_Ret>(pthis, args...);
+				return this->MI_MFP::Call<T_Ret>(pthis, args...);
 			}
 			case Private::MFP_TYPE::VI_MFP:
 			{
-				return this->To_VI_MFP().Apply<T_Ret>(pthis, args...);
+				return this->To_VI_MFP().Call<T_Ret>(pthis, args...);
 			}
 			case Private::MFP_TYPE::Full_MFP:
 			{
-				return this->Full_MFP::Apply<T_Ret>(pthis, args...);
+				return this->Full_MFP::Call<T_Ret>(pthis, args...);
 			}
 			case Private::MFP_TYPE::Invalid:
 			default:

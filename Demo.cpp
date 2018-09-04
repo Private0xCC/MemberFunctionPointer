@@ -125,8 +125,8 @@ void SI_MFP_Test()
 	cout << "转换为C++原生指针调用:" << endl;
 	(p_bottom->*bottommfp2)(3);
 
-	cout << "Apply:" << endl;
-	mfp.Apply<int>(p_bottom, 5);
+	cout << "Call:" << endl;
+	mfp.Call<int>(p_bottom, 5);
 
 	cout << "==================SI_MFP_Test End==================" << endl;
 }
@@ -157,8 +157,8 @@ void MI_MFP_Test()
 	cout << "转换为C++原生指针调用:" << endl;
 	(p_bottom->*bottommfp2)(3);
 
-	cout << "Apply:" << endl;
-	mfp.Apply<int>(p_bottom, 5);
+	cout << "Call:" << endl;
+	mfp.Call<int>(p_bottom, 5);
 
 	cout << "==================MI_MFP_Test End==================" << endl;
 }
@@ -190,8 +190,8 @@ void VI_MFP_Test()
 	cout << "转换为C++原生指针调用:" << endl;
 	(p_bottom->*bottommfp2)(3);
 
-	cout << "Apply:" << endl;
-	mfp.Apply<int>(p_bottom, 5);
+	cout << "Call:" << endl;
+	mfp.Call<int>(p_bottom, 5);
 
 	cout << "==================VI_MFP_Test End==================" << endl;
 }
