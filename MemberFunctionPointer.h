@@ -149,6 +149,13 @@ namespace Private
 	protected:
 		//在单继承成员函数指针基础上多了 this 调整值
 		int Delta;
+#ifdef _WIN64
+		union
+		{
+			int Unuse;
+			int VBTableIndex;
+		};
+#endif
 	public:
 		MI_MFP();
 
@@ -183,7 +190,9 @@ namespace Private
 	protected:
 		//在多继承成员函数指针继承上多了虚基类表索引
 		//该值指示了应该在[虚基类表]中哪个位置(以字节为单位)开始取值(取int)得到[虚基类]的偏移量
+#ifndef _WIN64
 		int VBTableIndex;
+#endif // !_WIN64
 	public:
 		VI_MFP();
 
@@ -280,7 +289,12 @@ namespace Private
 		//多继承类的成员函数指针
 		MI_MFP = sizeof(void(__MIC::*)()),
 		//虚继承类的成员函数指针
+#ifdef _WIN64
+		VI_MFP = sizeof(void(__VIC::*)())+1,
+#else
 		VI_MFP = sizeof(void(__VIC::*)()),
+#endif
+		
 		//完整成员函数指针
 		Full_MFP = sizeof(void(__UND::*)()),
 	};
@@ -413,7 +427,7 @@ namespace Private
 
 #pragma region 多继承成员函数指针
 
-	MI_MFP::MI_MFP() :SI_MFP(), Delta(0)
+	MI_MFP::MI_MFP() :SI_MFP(), Delta(0), Unuse(0xcccccccc)
 	{
 	}
 
@@ -505,10 +519,21 @@ namespace Private
 
 #pragma region 虚继承成员函数指针
 
-	VI_MFP::VI_MFP() :MI_MFP(), VBTableIndex(0)
+#ifdef  _WIN64
+	VI_MFP::VI_MFP() :MI_MFP()
+	{
+		//基类 MI_MFP 构造函数会把 VBTableIndex 设置为 0xcccccccc
+		//子类需要将成员设置为 0
+		VBTableIndex = 0;
+	}
+#else
+	VI_MFP::VI_MFP() : MI_MFP(),VBTableIndex(0)
 	{
 
 	}
+#endif //  _WIN64
+
+	
 
 	template<class T, class T_Ret, class ...T_Args>
 	VI_MFP::VI_MFP(T_Ret(T::*mfp)(T_Args...))
@@ -816,8 +841,22 @@ namespace Private
 			} u;
 
 			u._mfp = mfp;
-
 			MFP_TYPE type = (MFP_TYPE)sizeof(mfp);
+#ifdef _WIN64
+			//64位环境时，多继承成员函数指针和虚继承成员函数指针的大小一样
+			//通过判断第三个成员有没有初始化来确定类型
+			if (type == MFP_TYPE::MI_MFP)
+			{
+				if (u.i2 == (int)0xcccccccc)
+				{
+					type = MFP_TYPE::MI_MFP;
+				}
+				else
+				{
+					type = MFP_TYPE::VI_MFP;
+				}
+			}
+#endif // _WIN64
 			
 			switch (type)
 			{
