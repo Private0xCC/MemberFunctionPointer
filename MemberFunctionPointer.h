@@ -427,9 +427,15 @@ namespace Private
 
 #pragma region 多继承成员函数指针
 
+#ifdef _WIN64
 	MI_MFP::MI_MFP() :SI_MFP(), Delta(0), Unuse(0xcccccccc)
 	{
 	}
+#else
+	MI_MFP::MI_MFP() : SI_MFP(), Delta(0)
+	{
+	}
+#endif
 
 	template<class T, class T_Ret, class ...T_Args>
 	MI_MFP::MI_MFP(T_Ret(T::*mfp)(T_Args...))
