@@ -8,7 +8,7 @@ using namespace Private;
 class Top
 {
 public:
-	int Top_i = 0;
+	int Top_i = 222;
 	int TopFunc(int i)
 	{
 		cout << "TopFunc    this:" << this << "  Top_i:" << Top_i << "  i:" << i << endl;
@@ -24,7 +24,7 @@ public:
 class Left :public Top
 {
 public:
-	int Left_i = 0;
+	int Left_i = 55555;
 	int LeftFunc(int i)
 	{
 		cout << "LeftFunc    this:" << this << "  Left_i:" << Left_i << "  i:" << i << endl;
@@ -35,7 +35,7 @@ public:
 class Right :public Top
 {
 public:
-	int Right_i = 0;
+	int Right_i = 77777;
 	int RightFunc(int i)
 	{
 		cout << "RightFunc    this:" << this << "  Right_i:" << Right_i << "  i:" << i << endl;
@@ -46,7 +46,7 @@ public:
 class Bottom :public Left, public Right
 {
 public:
-	int Bottom_i = 0;
+	int Bottom_i = 99999;
 	int BottomFunc(int i)
 	{
 		cout << "BottomFunc    this:" << this << "  Bottom_i:" << Bottom_i << "  i:" << i << endl;
@@ -57,7 +57,7 @@ public:
 class VLeft :public virtual Top
 {
 public:
-	int VLeft_i = 0;
+	int VLeft_i = 66666;
 	int VLeftFunc(int i)
 	{
 		cout << "VLeftFunc    this:" << this << "  VLeft_i:" << VLeft_i << "  i:" << i << endl;
@@ -68,7 +68,7 @@ public:
 class VRight :public virtual Top
 {
 public:
-	int VRight_i = 0;
+	int VRight_i = 54321;
 	int VRightFunc(int i)
 	{
 		cout << "VRightFunc    this:" << this << "  VRight_i:" << VRight_i << "  i:" << i << endl;
@@ -79,11 +79,16 @@ public:
 class Bottom2 :public virtual VLeft, public virtual VRight
 {
 public:
-	int Bottom2_i = 0;
+	int Bottom2_i = 12345;
 	int Bottom2Func(int i)
 	{
 		cout << "Bottom2Func    this:" << this << "  Bottom2_i:" << Bottom2_i << "  i:" << i << endl;
 		return i;
+	}
+
+	 void AAA()
+	{
+
 	}
 };
 
@@ -196,11 +201,16 @@ void VI_MFP_Test()
 	cout << "==================VI_MFP_Test End==================" << endl;
 }
 
+void Full_MFP_Test()
+{
+
+}
+
 int main()
 {
+	VI_MFP_Test();
 	SI_MFP_Test();
 	MI_MFP_Test();
-	VI_MFP_Test(); 
 	//更多单元测试正在更新...
 	return 0;
 }

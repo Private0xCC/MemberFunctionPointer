@@ -9,7 +9,7 @@
 
 //代码是针对 微软编译器 实现的
 #ifndef _MSC_VER
-#error [Private.MemberFunctionPointer]需要仅支持 MS VS 编译器
+#error [Private.MemberFunctionPointer]仅支持 MS VS 编译器
 #endif
 
 #pragma endregion
@@ -594,11 +594,10 @@ namespace Private
 	template<class T>
 	void * VI_MFP::Addressing(T * pthis) const
 	{
-		//虚基类表中，记录了 vbptr 到虚基类子对象的偏移量，也就是子类到虚基类子对象的偏移，数据类型是int，
+		//虚基类表中，记录了 vbptr这个成员的地址(即 pvbptr) 到虚基类子对象的偏移量，数据类型是int，
 		//也就说每个数据占四个字节，需要注意的是 VBTableIndex的单位是1字节，一般VBTableIndex的值是四的倍数
 		//例如，子类的第一个虚基类偏移记录在 vbptr指定地址+4的地方(vbptr+0 至 vbptr+3 为 0), VBTableIndex就等于4
 		//子类的第二个虚基类偏移记录在 vbptr指定地址+8的地方, VBTableIndex就等于8
-		//作者其实不是很明白为什么这么设计，感觉很怪，
 
 		//虚继承中，继承情况很复杂，vbptr 的位置只有编译器知道(编译期)，
 		//我们是无法确定的(也许可以确定，但是作者截至目前为止还不知道如何确定 vbptr 的位置)
@@ -607,16 +606,24 @@ namespace Private
 		//拿不到vbptr，就没法 根据 VBTableIndex 计算 虚基类子对象的偏移量，就拿不到调整后的this
 		//所以，我们只能通过编译器来寻址 。具体参考 AutoAddressing 函数
 
-		//假定类的第一项就是 vbptr，以下代码展示了如何寻址
-		//int virtual_delta = 0;
-		//if (this->VBTableIndex) 
+		//假设类的第 FVtorDisp 字节处是vbptr，以下代码展示了如何寻址
+
+		//int FVtorDisp = 0;
+		//void* AdjustedThis = nullptr;
+		//if (this->VBTableIndex)//这个成员不为0，说明是某个虚基类的函数
 		//{
-		//	const char * vbptr = *(char**)pthis;
+		//	//先通过 FVtorDisp 找到 vbptr
+		//	const char** pvbptr = (const char**)((char*)pthis + this->Delta + FVtorDisp);
+		//	const char* vbptr = *pvbptr;
+		//	//然后从虚基类表中取到虚基类偏移量(这个偏移量是pvbptr到虚基类子成员的偏移量)
+		//	int virtual_delta = *(int*)(vbptr + this->VBTableIndex);
 
-		//	virtual_delta = *(int*)(vbptr + this->VBTableIndex);
+		//	AdjustedThis = (char*)pvbptr + virtual_delta;
 		//}
-
-		//void * AdjustedThis = (char *)pthis + Delta + virtual_delta;
+		//else
+		//{
+		//	AdjustedThis = (char*)pthis + this->Delta + this->FVtorDisp;
+		//}
 
 		//return AdjustedThis;
 
@@ -709,26 +716,23 @@ namespace Private
 	{
 		//因为完整成员函数指针可以通过 FVtorDisp 找到 vbptr,所以并不需要 this 的类型,区别于 虚继承成员函数指针的寻址方式
 
-		//virtual_delta表示子类到虚基类子对象的偏移量
-		int virtual_delta = 0;
-
-		if (this->VBTableIndex)
+		void* AdjustedThis = nullptr;
+		if (this->VBTableIndex)//这个成员不为0，说明是某个虚基类的函数
 		{
 			//先通过 FVtorDisp 找到 vbptr
-			const char * vbptr = *(char **)((char *)pthis + this->Delta + this->FVtorDisp);
-			//然后从虚基类表中取到虚基类偏移量
-			virtual_delta = *(int*)(vbptr + this->VBTableIndex);
+			const char** pvbptr = (const char**)((char*)pthis + this->Delta + this->FVtorDisp);
+			const char* vbptr = *pvbptr;
+			//然后从虚基类表中取到虚基类偏移量(这个偏移量是pvbptr到虚基类子成员的偏移量)
+			int virtual_delta = *(int*)(vbptr + this->VBTableIndex);
+			
+			AdjustedThis = (char*)pvbptr + virtual_delta;
+		}
+		else
+		{
+			AdjustedThis = (char*)pthis + this->Delta + this->FVtorDisp;
 		}
 
-		// 最后计算调整后的this
-		// this 到基类子对象 this的偏移量 = 
-		// this调整值(Delta) + vbtpr到基类子对象的偏移量(virtual_delta)
-		// 整个计算过程为:1.通过this 找到虚基类表 2.通过虚基类表计算得到虚基类表到基类子对象的偏移 3.最后通过偏移找到基类子对象
-
-		void * AdjustedThis = (char *)pthis + Delta /*+ FVtorDisp */ + virtual_delta;//不应该加上FVtorDisp,之前的理解是错误的
-
 		return AdjustedThis;
-
 	}
 
 	void * Full_MFP::AutoAddressing(void * pthis) const
